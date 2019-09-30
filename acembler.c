@@ -1,5 +1,10 @@
 #include "acembler.h"
 
+/** Iterates to the next argument (one past the given delimiter) or until we hit a null byte
+ * @param str The string to iterate through
+ * @param delim The delimiter to break on
+ * @return A char* to the next character in memory after the delim is hit
+ */
 char* nextArg(char* str, char delim){
     //Iterate through until we hit a null byte or the deliminator
     while(*str != delim && *str != '\0'){
@@ -23,8 +28,15 @@ char* nextArg(char* str, char delim){
     return NULL;
 }
 
+/** Iterates through a string and does a deep copy until a null byte or specified stopping point is hit
+ * @param base The base string
+ * @param until The ending character
+ * @param cpy The char* to copy file contents into
+ * @param cpySize The size of cpy
+ * @return 1 on success, 0 otherwise
+ */
 int substr(char* base, char until, char* cpy, int cpySize){
-    //Iterate through until we hit a null byte or the deliminator
+    //Iterate through until we hit a null byte or the delim
     int i;
     for(i = 0; *base != until && i < 32; i++){
         *(cpy++) = *(base++);
@@ -36,6 +48,11 @@ int substr(char* base, char until, char* cpy, int cpySize){
     return 1;
 }
 
+/** Compares one string against another and returns true if it's an exact match (with only white space following)
+ * @param main The main string
+ * @param substr The substring being compared against
+ * @return 1 if it's an exact match (with only white space following), 0 otherwise
+ */
 int compareString(char* main, char* substr){
     while(*substr != '\0' && *main != '\0'){
         if(*(main++) != *(substr++)){
@@ -44,13 +61,16 @@ int compareString(char* main, char* substr){
     }
 
     //If there isn't more to the instruction name
-    if(*main == '\n' || *main == ' ' || *main == '\0'){
+    if(*main == '\n' || *main == '\t' || *main == ' ' || *main == '\0'){
         return 1;
     }
     return 0;
 }
 
-//Comparing R-Type instructions to the given instruction
+/** Checks to see if the given instruction is an R-Type
+ * @param instr The instruction being checked
+ * @return The instruction index if it's an R-Type instruction, -1 otherwise
+ */
 int compRType(char* instr){
     int register r_vals = sizeof(R_TYPE_FCODE);
     for(int i = 0; i < r_vals; i++){
@@ -61,7 +81,10 @@ int compRType(char* instr){
     return -1;
 }
 
-//Comparing I-Type instructions to the given instruction
+/** Checks to see if the given instruction is an I-Type
+ * @param instr The instruction being checked
+ * @return The instruction index if it's an I-Type instruction, -1 otherwise
+ */
 int compIType(char* instr){
     int register i_vals = sizeof(I_TYPE_OPCODE);
     for(int i = 0; i < i_vals; i++){
@@ -72,7 +95,10 @@ int compIType(char* instr){
     return -1;
 }
 
-//Comparing J-Type instructions to the given instruction
+/** Checks to see if the given instruction is a J-Type
+ * @param instr The instruction being checked
+ * @return The instruction index if it's an J-Type instruction, -1 otherwise
+ */
 int compJType(char* instr){
     int register j_vals = sizeof(J_TYPE_OPCODE);
     for(int i = 0; i < j_vals; i++){
@@ -83,7 +109,10 @@ int compJType(char* instr){
     return -1;
 }
 
-//Comparing J-Type instructions to the given instruction
+/** Checks to see what the given register value is
+ * @param instr The instruction being checked
+ * @return The instruction index if it's valid register, -1 otherwise
+ */
 int compReg(char* reg){
     int register regs = sizeof(REG);
     for(int i = 0; i < regs; i++){
@@ -94,15 +123,24 @@ int compReg(char* reg){
     return -1;
 }
 
+/** Parses the register from a string
+ * @param reg The register string
+ * @return The register number
+ */
 int parseReg(char* reg){
     int register regNum;
-    if((regNum = atoi(reg)) != 0){
+    if((regNum = compReg(reg)) != -1){
         return regNum;
     } else {
-        return compReg(reg);
+        return atoi(reg);
     }
 }
 
+/** Handles R-Type instructions
+ * @param instr The instruction passed in
+ * @param instrIdx The instruction index
+ * @param new_instr A pointer to the instruction struct that will get altered
+ */
 void handleRType(char* instr, int instrIdx, r_instr* new_instr){
     //Setting the opcode
     new_instr->opcode = 0;
@@ -124,17 +162,17 @@ void handleRType(char* instr, int instrIdx, r_instr* new_instr){
         substr(instr, '\n', val, DELIM_SIZE);
         new_instr->shamt = atoi(val);
         
-        //If atoi didn't work
-        if(!new_instr->shamt){
-            printf("Could not parse the shift amount properly!");
-        }
+        //Set source register to 0 since we're not using it
         new_instr->rs = 0;
     }
     //If the register instr is a jump register
     else if(instrIdx == 3){
+        //Get the source register
         instr = nextArg(instr, '$');
         substr(instr, '\n', val, DELIM_SIZE);
         new_instr->rs = parseReg(val);
+
+        //Set all unused vals to 0
         new_instr->rt = 0;
         new_instr->rd = 0;
         new_instr->shamt = 0;
@@ -166,11 +204,16 @@ void handleRType(char* instr, int instrIdx, r_instr* new_instr){
     }
 }
 
+/** Handles I-Type instructions
+ * @param instr The instruction passed in
+ * @param instrIdx The instruction index
+ * @param new_instr A pointer to the instruction struct that will get altered
+ */
 void handleIType(char* instr, int instrIdx, i_instr* new_instr){
     //Setting the opcode
     new_instr->opcode = I_TYPE_OPCODE[instrIdx];
 
-    //Setting the starting point in the loop depening upon the immediate function
+    //Setting the starting point in the loop depening upon the immediate function (gets just rt for store/load, rs & rt for other)
     int register i = (instrIdx > 4 && instrIdx < 14)? 1 : 0;
 
     for(; i < 2; i++){
@@ -184,15 +227,17 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
     }
     //If it's a store/load instruction
     if(instrIdx > 4 && instrIdx < 14){
+        //Getting the immediate (offset)
         instr = nextArg(instr, ',');
         substr(instr, '(', val, DELIM_SIZE);
         new_instr->immediate = atoi(val);
 
+        //Getting the source (register in the parenthesis)
         instr = nextArg(instr, '$');
         substr(instr, ')', val, DELIM_SIZE);
         new_instr->rs = parseReg(val);
-    //Otherwise
     } else {
+        //Otherwise, just store the immediate value
         instr = nextArg(instr, ',');
         substr(instr, '\n', val, DELIM_SIZE);
         new_instr->immediate = atoi(val);
@@ -206,8 +251,16 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
     }
 }
 
+/** Handles J-Type instructions
+ * @param instr The instruction passed in
+ * @param instrIdx The instruction index
+ * @param new_instr A pointer to the instruction struct that will get altered
+ */
 void handleJType(char* instr, int instrIdx, j_instr* new_instr){
+    //Setting the opcode
     new_instr->opcode = J_TYPE_OPCODE[instrIdx];
+
+    //Setting the address
     instr = nextArg(instr, ' ');
     substr(instr, '\n', val, DELIM_SIZE);
     new_instr->addr = atoi(instr);
@@ -223,6 +276,7 @@ int main(int argc, char** argv){
     char* out_file = "out.mips";
     int opt;
 
+    //Read in options
     while((opt = getopt(argc, argv, ":vf:o:")) != -1){
         switch (opt){
             case 'f':
@@ -250,12 +304,13 @@ int main(int argc, char** argv){
         return 1;
     }
 
-    //Get the content size
+    //Get the content size and allocate a properly-sized string
     fseek(file, 0, SEEK_END);
     int str_size = ftell(file);
     fseek(file, 0, SEEK_SET);
     char* asm_code = (char*)malloc(str_size);
 
+    //Reading the file in to a string
     char tempChar = getc(file);
     for(int i = 0; !feof(file); i++){
         asm_code[i] = tempChar;
@@ -275,11 +330,15 @@ int main(int argc, char** argv){
         return 1;
     }
 
-    char* asm_cursor = asm_code;
-    int instrIdx = 0;
+    //Allocate space for all of the instruction structs
     r_instr* r_instruct = malloc(sizeof(r_instr));
     i_instr* i_instruct = malloc(sizeof(i_instr));
     j_instr* j_instruct = malloc(sizeof(j_instr));
+
+    //A cursor for the assembly code
+    char* asm_cursor = asm_code;
+    //Keeps track of the index of the instruction
+    int instrIdx = 0;
     while(asm_cursor != NULL){
         //Handle R-Type instructions
         if((instrIdx = compRType(asm_cursor)) != -1){
