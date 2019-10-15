@@ -61,8 +61,10 @@ typedef struct j_type_struct{
 //    0x22
 // 11: subu (subtract unsigned)
 //    0x23
-char* R_TYPE_INSTR[] = {"add", "addu", "and", "jr", "nor", "or", "slt", "sltu", "sll", "slr", "sub", "subu"};
-char R_TYPE_FCODE[] = {0x20, 0x21, 0x24, 0x08, 0x27, 0x25, 0x2a, 0x2b, 0x00, 0x02, 0x22, 0x23};
+// 12: xor (XOR)
+//    0x26
+char* R_TYPE_INSTR[] = {"add", "addu", "and", "jr", "nor", "or", "slt", "sltu", "sll", "slr", "sub", "subu", "xor"};
+char R_TYPE_FCODE[] = {0x20, 0x21, 0x24, 0x08, 0x27, 0x25, 0x2a, 0x2b, 0x00, 0x02, 0x22, 0x23, 0x26};
 
 // I-Type Instructions:
 //  0: addi (add immediate)
@@ -107,8 +109,10 @@ char I_TYPE_OPCODE[] = {0x08, 0x09, 0x0c, 0x04, 0x05, 0x24, 0x25, 0x30, 0x0f, 0x
 //    0x02
 //  1: jal (jump and link)
 //    0x03
-char* J_TYPE_INSTR[] = {"j", "jal"};
-char J_TYPE_OPCODE[] = {0x02, 0x03};
+//  2: halt (halt)
+//    0x3f
+char* J_TYPE_INSTR[] = {"j", "jal", "halt"};
+char J_TYPE_OPCODE[] = {0x02, 0x03, 0x3f};
 
 // Register aliases:
 //     0: $zero (zero)
