@@ -132,9 +132,11 @@ char* REG[] = {"zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2
 
 //Helper functions
 char* nextArg(char* str, char delim);
+char findFirst(char* str, char c1, char c2);
 int compareString(char* main, char* substr);
 int substr(char* str, char until, char* cpy, int cpySize);
 int parseReg(char* reg);
+int parseNum(char* str);
 
 //Comparison functions; returns 1 if it's an X-Type instr, 0 otherwise
 int compRType(char* instr);

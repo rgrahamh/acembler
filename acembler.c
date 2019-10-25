@@ -28,6 +28,39 @@ char* nextArg(char* str, char delim){
     return NULL;
 }
 
+/** Returns the first character out of the two found while iterating through a list
+ * @param str The string to iterate through
+ * @param c1 The first character
+ * @param c2 The second character
+ * @return The character found first (or a null byte if neither were found before the end of the string)
+ */
+char findFirst(char* str, char c1, char c2){
+    while(*str != '\0'){
+        if(*str == c1){
+            return c1;
+        }
+        else if(*str == c2){
+            return c2;
+        }
+        str++;
+    }
+    return '\0';
+}
+
+/** Returns a parsed integer representation of either a hex or a decimal string
+ * @param str The string containing the number
+ * @return An integer representation of str
+ */
+int parseNum(char* instr){
+    if(findFirst(instr, 'x', '\n') == 'x'){
+        //Parse hex value
+        return strtoul(instr, NULL, 16);
+    }
+    else{
+        //Parse integer value
+        return atoi(instr);
+    }
+}
 /** Iterates through a string and does a deep copy until a null byte or specified stopping point is hit
  * @param base The base string
  * @param until The ending character
@@ -38,10 +71,10 @@ char* nextArg(char* str, char delim){
 int substr(char* base, char until, char* cpy, int cpySize){
     //Iterate through until we hit a null byte or the delim
     int i;
-    for(i = 0; *base != until && i < 32; i++){
+    for(i = 0; *base != until && i < cpySize; i++){
         *(cpy++) = *(base++);
     }
-    if(i == 32){
+    if(i == cpySize){
         return 0;
     }
     *cpy = '\0';
@@ -129,10 +162,10 @@ int compReg(char* reg){
  */
 int parseReg(char* reg){
     int register regNum;
-    if((regNum = compReg(reg)) != -1){
+    if((regNum = atoi(reg)) != 0){
         return regNum;
     } else {
-        return atoi(reg);
+        return compReg(reg);
     }
 }
 
@@ -143,8 +176,8 @@ int parseReg(char* reg){
  */
 void handleRType(char* instr, int instrIdx, r_instr* new_instr){
     //Setting the opcode
-    new_instr->opcode = 0;
     new_instr->funct = R_TYPE_FCODE[instrIdx];
+    new_instr->opcode = 0;
 
     //If the register instr is a shift instruction
     if(instrIdx == 8 || instrIdx == 9){
@@ -160,7 +193,7 @@ void handleRType(char* instr, int instrIdx, r_instr* new_instr){
         }
         instr = nextArg(instr, ',');
         substr(instr, '\n', val, DELIM_SIZE);
-        new_instr->shamt = atoi(val);
+        new_instr->shamt = parseNum(val);
         
         //Set source register to 0 since we're not using it
         new_instr->rs = 0;
@@ -214,7 +247,7 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
     new_instr->opcode = I_TYPE_OPCODE[instrIdx];
 
     //Setting the starting point in the loop depening upon the immediate function (gets just rt for store/load, rs & rt for other)
-    int register i = (instrIdx > 4 && instrIdx < 14)? 1 : 0;
+    int register i = (instrIdx > 4 && instrIdx < 15)? 1 : 0;
 
     for(; i < 2; i++){
         instr = nextArg(instr, '$');
@@ -225,12 +258,20 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
             new_instr->rt = parseReg(val);
         }
     }
+
+    //If it's an arithmetic operation, change the register loctions
+    if(instrIdx < 3 || instrIdx > 14){
+        i = new_instr->rs;
+        new_instr->rs = new_instr->rt;
+        new_instr->rt = i;
+    }
+
     //If it's a store/load instruction
-    if(instrIdx > 4 && instrIdx < 14){
+    if(instrIdx > 4 && instrIdx < 15){
         //Getting the immediate (offset)
         instr = nextArg(instr, ',');
         substr(instr, '(', val, DELIM_SIZE);
-        new_instr->immediate = atoi(val);
+        new_instr->immediate = parseNum(val);
 
         //Getting the source (register in the parenthesis)
         instr = nextArg(instr, '$');
@@ -240,7 +281,7 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
         //Otherwise, just store the immediate value
         instr = nextArg(instr, ',');
         substr(instr, '\n', val, DELIM_SIZE);
-        new_instr->immediate = atoi(val);
+        new_instr->immediate = parseNum(val);
     }
 
     if(VERBOSE){
@@ -263,7 +304,7 @@ void handleJType(char* instr, int instrIdx, j_instr* new_instr){
     //Setting the address
     instr = nextArg(instr, ' ');
     substr(instr, '\n', val, DELIM_SIZE);
-    new_instr->addr = atoi(instr);
+    new_instr->addr = parseNum(instr) >> 2;
 
     if(VERBOSE){
         printf("Instr: %s\n", J_TYPE_INSTR[instrIdx]);
@@ -271,15 +312,18 @@ void handleJType(char* instr, int instrIdx, j_instr* new_instr){
     }
 }
 
+/** Main function
+ * @return 0 if successful, 1 if there were issues with options, 2 if there were I/O problems
+ */
 int main(int argc, char** argv){
     char* in_file = "in.mips";
     char* out_file = "out.mips";
     int opt;
 
     //Read in options
-    while((opt = getopt(argc, argv, ":vf:o:")) != -1){
+    while((opt = getopt(argc, argv, ":vhs:o:")) != -1){
         switch (opt){
-            case 'f':
+            case 's':
                 in_file = optarg;
                 break;
             case 'o':
@@ -289,10 +333,11 @@ int main(int argc, char** argv){
                 VERBOSE = 1;
                 break;
             case 'h':
-                printf("-f <input_file>: Specified the input file for the MIPS assembly\n-o <output_file>: Specified the output file for the binary\n-v: Sets the verbose option\n");
-                break;
+                printf("-s <source_file>: Specifies the source for the MIPS assembler\n-o <output_file>: Specified the output file for the binary\n-v: Sets the verbose option\n");
+                return 0;
             case '?':
-                printf("-%c was not a recognized option! For help, use the -h.\n", opt);
+                printf("Not a valid format! For help, use the -h option.\n");
+                return 1;
                 break;
         }
     }
@@ -301,7 +346,7 @@ int main(int argc, char** argv){
     FILE* file = fopen(in_file, "r");
     if(file == NULL){
         printf("Could not open %s for reading!\n", in_file);
-        return 1;
+        return 2;
     }
 
     //Get the content size and allocate a properly-sized string
@@ -327,7 +372,7 @@ int main(int argc, char** argv){
     file = fopen(out_file, "w");
     if(file == NULL){
         printf("Could not open %s for writing!\n", out_file);
-        return 1;
+        return 2;
     }
 
     //Allocate space for all of the instruction structs
@@ -343,23 +388,32 @@ int main(int argc, char** argv){
         //Handle R-Type instructions
         if((instrIdx = compRType(asm_cursor)) != -1){
             handleRType(asm_cursor, instrIdx, r_instruct);
-            for(int i = 0; i < 4; i++){
-                fprintf(file, "%c", ((char*)r_instruct)[i]);
-            }
+
+            //Write the instruction to file
+            fprintf(file, "%c", (r_instruct->opcode << 2) + ((r_instruct->rs >> 3) & 0x3));
+            fprintf(file, "%c", ((r_instruct->rs & 0x7) << 5) + r_instruct->rt);
+            fprintf(file, "%c", (r_instruct->rd << 3) + ((r_instruct->shamt >> 2) & 0x7));
+            fprintf(file, "%c", ((r_instruct->shamt & 0x3) << 6) + r_instruct->funct); 
         }
         //Handle I-Type instructions
         else if((instrIdx = compIType(asm_cursor)) != -1){
             handleIType(asm_cursor, instrIdx, i_instruct);
-            for(int i = 0; i < 4; i++){
-                fprintf(file, "%c", ((char*)i_instruct)[i]);
-            }
+
+            //Write the instruction to file
+            fprintf(file, "%c", (i_instruct->opcode << 2) + ((i_instruct->rs >> 3) & 0x3));
+            fprintf(file, "%c", ((i_instruct->rs & 0x7) << 5) + i_instruct->rt);
+            fprintf(file, "%c", (i_instruct->immediate & 0xff00) >> 8);
+            fprintf(file, "%c", (i_instruct->immediate & 0x00ff));
         }
         //Handle J-Type instructions
         else if((instrIdx = compJType(asm_cursor)) != -1){
             handleJType(asm_cursor, instrIdx, j_instruct);
-            for(int i = 0; i < 4; i++){
-                fprintf(file, "%c", ((char*)j_instruct)[i]);
-            }
+
+            //Write the instruction to file
+            fprintf(file, "%c", (j_instruct->opcode << 2) + ((j_instruct->addr >> 24) & 0x3));
+            fprintf(file, "%c", (j_instruct->addr & 0xff0000) >> 16);
+            fprintf(file, "%c", (j_instruct->addr & 0x00ff00) >> 8);
+            fprintf(file, "%c", (j_instruct->addr & 0x0000ff));
         }
         else{
             printf("Unrecognized instruction! Skipping...\n");
