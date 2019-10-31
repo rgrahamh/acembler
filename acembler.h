@@ -102,7 +102,7 @@ char R_TYPE_FCODE[] = {0x20, 0x21, 0x24, 0x08, 0x27, 0x25, 0x2a, 0x2b, 0x00, 0x0
 // 16: slti (set less than immediate)
 //    0x0a
 char* I_TYPE_INSTR[] = {"addi", "addiu", "andi", "beq", "bne", "lbu", "lhu", "ll", "lui", "lw", "sltiu", "sb", "sc", "sh", "sw", "ori", "slti"};
-char I_TYPE_OPCODE[] = {0x08, 0x09, 0x0c, 0x04, 0x05, 0x24, 0x25, 0x30, 0x0f, 0x24, 0x0b, 0x28, 0x38, 0x29, 0x2b, 0x0d, 0x0a};
+char I_TYPE_OPCODE[] = {0x08, 0x09, 0x0c, 0x04, 0x05, 0x24, 0x25, 0x30, 0x0f, 0x23, 0x0b, 0x28, 0x38, 0x29, 0x2b, 0x0d, 0x0a};
 
 // J-Type Instructions:
 //  0: j (jump)
@@ -128,7 +128,6 @@ char J_TYPE_OPCODE[] = {0x02, 0x03, 0x3f};
 //    30: $fp (frame pointer)
 //    31: $ra (return address)
 char* REG[] = {"zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "fa"};
-
 
 //Helper functions
 char* nextArg(char* str, char delim);
