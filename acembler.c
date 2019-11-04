@@ -281,7 +281,7 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
         //Otherwise, just store the immediate value
         instr = nextArg(instr, ',');
         substr(instr, '\n', val, DELIM_SIZE);
-        new_instr->immediate = parseNum(val);
+        new_instr->immediate = (instrIdx == 3 || instrIdx == 4)? parseNum(val) >> 2 : parseNum(val);
     }
 
     if(VERBOSE){
@@ -300,6 +300,11 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
 void handleJType(char* instr, int instrIdx, j_instr* new_instr){
     //Setting the opcode
     new_instr->opcode = J_TYPE_OPCODE[instrIdx];
+
+	//If it's a halt instruction, don't go any further
+	if(new_instr->opcode == 0x3f){
+		return;
+	}
 
     //Setting the address
     instr = nextArg(instr, ' ');
@@ -373,6 +378,11 @@ int main(int argc, char** argv){
     if(file == NULL){
         printf("Could not open %s for writing!\n", out_file);
         return 2;
+    }
+
+    //Adding padding to the first 0x1000 bytes
+    for(int i = 0; i < 0x1000; i++){
+        fprintf(file, "%c", '\0');
     }
 
     //Allocate space for all of the instruction structs
