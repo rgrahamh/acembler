@@ -281,7 +281,7 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
         //Otherwise, just store the immediate value
         instr = nextArg(instr, ',');
         substr(instr, '\n', val, DELIM_SIZE);
-        new_instr->immediate = (instrIdx == 3 || instrIdx == 4)? parseNum(val) >> 2 : parseNum(val);
+        new_instr->immediate = parseNum(val);
     }
 
     if(VERBOSE){
