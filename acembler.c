@@ -162,7 +162,7 @@ int compReg(char* reg){
  */
 int parseReg(char* reg){
     int register regNum;
-    if((regNum = atoi(reg)) != 0){
+    if((regNum = atoi(reg)) != 0 || *reg == '0'){
         return regNum;
     } else {
         return compReg(reg);
@@ -188,7 +188,7 @@ void handleRType(char* instr, int instrIdx, r_instr* new_instr){
             if(i == 0){
                 new_instr->rd = parseReg(val);
             } else {
-                new_instr->rt = parseReg(val);
+                new_instr->rs = parseReg(val);
             }
         }
         instr = nextArg(instr, ',');
@@ -196,7 +196,7 @@ void handleRType(char* instr, int instrIdx, r_instr* new_instr){
         new_instr->shamt = parseNum(val);
         
         //Set source register to 0 since we're not using it
-        new_instr->rs = 0;
+        new_instr->rt = 0;
     }
     //If the register instr is a jump register
     else if(instrIdx == 3){
@@ -281,7 +281,7 @@ void handleIType(char* instr, int instrIdx, i_instr* new_instr){
         //Otherwise, just store the immediate value
         instr = nextArg(instr, ',');
         substr(instr, '\n', val, DELIM_SIZE);
-        new_instr->immediate = parseNum(val);
+        new_instr->immediate = (instrIdx == 3 || instrIdx == 4)? parseNum(val) >> 2 : parseNum(val);
     }
 
     if(VERBOSE){
@@ -324,9 +324,10 @@ int main(int argc, char** argv){
     char* in_file = "in.mips";
     char* out_file = "out.mips";
     int opt;
+	char* data_file = NULL;
 
     //Read in options
-    while((opt = getopt(argc, argv, ":vhs:o:")) != -1){
+    while((opt = getopt(argc, argv, ":vhd:s:o:")) != -1){
         switch (opt){
             case 's':
                 in_file = optarg;
@@ -336,6 +337,9 @@ int main(int argc, char** argv){
                 break;
             case 'v':
                 VERBOSE = 1;
+                break;
+            case 'd':
+                data_file = optarg;
                 break;
             case 'h':
                 printf("-s <source_file>: Specifies the source for the MIPS assembler\n-o <output_file>: Specified the output file for the binary\n-v: Sets the verbose option\n");
@@ -373,6 +377,27 @@ int main(int argc, char** argv){
         printf("Code:\n%s\n", asm_code);
     }
 
+	char data_buff[0x1000];
+	memset(data_buff, 0, 0x1000);
+
+	//Opening the data file for initialization
+	if(data_file != NULL){
+		//Opening the data file for reading
+		file = fopen(data_file, "r");
+		if(file == NULL){
+			printf("Could not open %s for reading in data! Skipping...\n", data_file);
+		}
+		else{
+			//Overwrite the start of the data block with the file contents (up to 4KB)
+			tempChar = getc(file);
+			for(int i = 0; !feof(file) && i <= 0x1000; i++){
+				data_buff[i] = tempChar;
+				tempChar = getc(file);
+			}
+			fclose(file);
+		}
+	}
+	
     //Opening the output file for writing
     file = fopen(out_file, "w");
     if(file == NULL){
@@ -380,10 +405,10 @@ int main(int argc, char** argv){
         return 2;
     }
 
-    //Adding padding to the first 0x1000 bytes
-    for(int i = 0; i < 0x1000; i++){
-        fprintf(file, "%c", '\0');
-    }
+	//Adding the first 0x1000 bytes to the file
+	for(int i = 0; i < 0x1000; i++){
+		fprintf(file, "%c", data_buff[i]);
+	}
 
     //Allocate space for all of the instruction structs
     r_instr* r_instruct = malloc(sizeof(r_instr));
@@ -400,30 +425,42 @@ int main(int argc, char** argv){
             handleRType(asm_cursor, instrIdx, r_instruct);
 
             //Write the instruction to file
-            fprintf(file, "%c", (r_instruct->opcode << 2) + ((r_instruct->rs >> 3) & 0x3));
-            fprintf(file, "%c", ((r_instruct->rs & 0x7) << 5) + r_instruct->rt);
-            fprintf(file, "%c", (r_instruct->rd << 3) + ((r_instruct->shamt >> 2) & 0x7));
+			//Byte 4
             fprintf(file, "%c", ((r_instruct->shamt & 0x3) << 6) + r_instruct->funct); 
+			//Byte 3
+            fprintf(file, "%c", (r_instruct->rd << 3) + ((r_instruct->shamt >> 2) & 0x7));
+			//Byte 2
+            fprintf(file, "%c", ((r_instruct->rs & 0x7) << 5) + r_instruct->rt);
+			//Byte 1
+            fprintf(file, "%c", (r_instruct->opcode << 2) + ((r_instruct->rs >> 3) & 0x3));
         }
         //Handle I-Type instructions
         else if((instrIdx = compIType(asm_cursor)) != -1){
             handleIType(asm_cursor, instrIdx, i_instruct);
 
             //Write the instruction to file
-            fprintf(file, "%c", (i_instruct->opcode << 2) + ((i_instruct->rs >> 3) & 0x3));
-            fprintf(file, "%c", ((i_instruct->rs & 0x7) << 5) + i_instruct->rt);
-            fprintf(file, "%c", (i_instruct->immediate & 0xff00) >> 8);
+			//Byte 4
             fprintf(file, "%c", (i_instruct->immediate & 0x00ff));
+			//Byte 3
+            fprintf(file, "%c", (i_instruct->immediate & 0xff00) >> 8);
+			//Byte 2
+            fprintf(file, "%c", ((i_instruct->rs & 0x7) << 5) + i_instruct->rt);
+			//Byte 1
+            fprintf(file, "%c", (i_instruct->opcode << 2) + ((i_instruct->rs >> 3) & 0x3));
         }
         //Handle J-Type instructions
         else if((instrIdx = compJType(asm_cursor)) != -1){
             handleJType(asm_cursor, instrIdx, j_instruct);
 
             //Write the instruction to file
-            fprintf(file, "%c", (j_instruct->opcode << 2) + ((j_instruct->addr >> 24) & 0x3));
-            fprintf(file, "%c", (j_instruct->addr & 0xff0000) >> 16);
-            fprintf(file, "%c", (j_instruct->addr & 0x00ff00) >> 8);
+			//Byte 4
             fprintf(file, "%c", (j_instruct->addr & 0x0000ff));
+			//Byte 3
+            fprintf(file, "%c", (j_instruct->addr & 0x00ff00) >> 8);
+			//Byte 2
+            fprintf(file, "%c", (j_instruct->addr & 0xff0000) >> 16);
+			//Byte 1
+            fprintf(file, "%c", (j_instruct->opcode << 2) + ((j_instruct->addr >> 24) & 0x3));
         }
         else{
             printf("Unrecognized instruction! Skipping...\n");
