@@ -327,27 +327,32 @@ int main(int argc, char** argv){
 	char* data_file = NULL;
 
     //Read in options
-    while((opt = getopt(argc, argv, ":vhd:s:o:")) != -1){
+    while((opt = getopt(argc, argv, ":vlhd:s:o:m:")) != -1){
         switch (opt){
-            case 's':
-                in_file = optarg;
-                break;
-            case 'o':
-                out_file = optarg;
-                break;
-            case 'v':
-                VERBOSE = 1;
-                break;
             case 'd':
                 data_file = optarg;
                 break;
             case 'h':
                 printf("-s <source_file>: Specifies the source for the MIPS assembler\n-o <output_file>: Specified the output file for the binary\n-v: Sets the verbose option\n");
                 return 0;
+			case 'l':
+				ENDIAN = LITTLE;
+				break;
+			case 'm':
+				mem_size = strtoul(optarg, NULL, 10);
+				break;
+            case 'o':
+                out_file = optarg;
+                break;
+            case 's':
+                in_file = optarg;
+                break;
+            case 'v':
+                VERBOSE = 1;
+                break;
             case '?':
                 printf("Not a valid format! For help, use the -h option.\n");
                 return 1;
-                break;
         }
     }
 
@@ -377,8 +382,8 @@ int main(int argc, char** argv){
         printf("Code:\n%s\n", asm_code);
     }
 
-	char data_buff[0x1000];
-	memset(data_buff, 0, 0x1000);
+	char data_buff[mem_size];
+	memset(data_buff, 0, mem_size);
 
 	//Opening the data file for initialization
 	if(data_file != NULL){
@@ -390,7 +395,7 @@ int main(int argc, char** argv){
 		else{
 			//Overwrite the start of the data block with the file contents (up to 4KB)
 			tempChar = getc(file);
-			for(int i = 0; !feof(file) && i <= 0x1000; i++){
+			for(int i = 0; !feof(file) && i <= mem_size; i++){
 				data_buff[i] = tempChar;
 				tempChar = getc(file);
 			}
@@ -405,8 +410,8 @@ int main(int argc, char** argv){
         return 2;
     }
 
-	//Adding the first 0x1000 bytes to the file
-	for(int i = 0; i < 0x1000; i++){
+	//Adding the first mem_size bytes to the file
+	for(int i = 0; i < mem_size; i++){
 		fprintf(file, "%c", data_buff[i]);
 	}
 
@@ -425,42 +430,63 @@ int main(int argc, char** argv){
             handleRType(asm_cursor, instrIdx, r_instruct);
 
             //Write the instruction to file
-			//Byte 4
-            fprintf(file, "%c", ((r_instruct->shamt & 0x3) << 6) + r_instruct->funct); 
-			//Byte 3
-            fprintf(file, "%c", (r_instruct->rd << 3) + ((r_instruct->shamt >> 2) & 0x7));
-			//Byte 2
-            fprintf(file, "%c", ((r_instruct->rs & 0x7) << 5) + r_instruct->rt);
-			//Byte 1
-            fprintf(file, "%c", (r_instruct->opcode << 2) + ((r_instruct->rs >> 3) & 0x3));
+			if(ENDIAN == BIG){
+				for(int i = 0; i < 32; i += 8){
+					fprintf(file, "%c", *((char*)(((unsigned int*)r_instruct) + i)));
+				}
+			}
+			else{
+				//Byte 4
+				fprintf(file, "%c", ((r_instruct->shamt & 0x3) << 6) + r_instruct->funct); 
+				//Byte 3
+				fprintf(file, "%c", (r_instruct->rd << 3) + ((r_instruct->shamt >> 2) & 0x7));
+				//Byte 2
+				fprintf(file, "%c", ((r_instruct->rs & 0x7) << 5) + r_instruct->rt);
+				//Byte 1
+				fprintf(file, "%c", (r_instruct->opcode << 2) + ((r_instruct->rs >> 3) & 0x3));
+			}
         }
         //Handle I-Type instructions
         else if((instrIdx = compIType(asm_cursor)) != -1){
             handleIType(asm_cursor, instrIdx, i_instruct);
 
             //Write the instruction to file
-			//Byte 4
-            fprintf(file, "%c", (i_instruct->immediate & 0x00ff));
-			//Byte 3
-            fprintf(file, "%c", (i_instruct->immediate & 0xff00) >> 8);
-			//Byte 2
-            fprintf(file, "%c", ((i_instruct->rs & 0x7) << 5) + i_instruct->rt);
-			//Byte 1
-            fprintf(file, "%c", (i_instruct->opcode << 2) + ((i_instruct->rs >> 3) & 0x3));
+			if(ENDIAN == BIG){
+				for(int i = 0; i < 32; i += 8){
+					fprintf(file, "%c", *((char*)(((unsigned int*)i_instruct) + i)));
+				}
+			}
+			else{
+				//Byte 4
+            	fprintf(file, "%c", (i_instruct->immediate & 0x00ff));
+				//Byte 3
+            	fprintf(file, "%c", (i_instruct->immediate & 0xff00) >> 8);
+				//Byte 2
+            	fprintf(file, "%c", ((i_instruct->rs & 0x7) << 5) + i_instruct->rt);
+				//Byte 1
+            	fprintf(file, "%c", (i_instruct->opcode << 2) + ((i_instruct->rs >> 3) & 0x3));
+			}
         }
         //Handle J-Type instructions
         else if((instrIdx = compJType(asm_cursor)) != -1){
             handleJType(asm_cursor, instrIdx, j_instruct);
 
             //Write the instruction to file
-			//Byte 4
-            fprintf(file, "%c", (j_instruct->addr & 0x0000ff));
-			//Byte 3
-            fprintf(file, "%c", (j_instruct->addr & 0x00ff00) >> 8);
-			//Byte 2
-            fprintf(file, "%c", (j_instruct->addr & 0xff0000) >> 16);
-			//Byte 1
-            fprintf(file, "%c", (j_instruct->opcode << 2) + ((j_instruct->addr >> 24) & 0x3));
+			if(ENDIAN == BIG){
+				for(int i = 0; i < 32; i += 8){
+					fprintf(file, "%c", *((char*)(((unsigned int*)j_instruct) + i)));
+				}
+			}
+			else{
+				//Byte 4
+            	fprintf(file, "%c", (j_instruct->addr & 0x0000ff));
+				//Byte 3
+            	fprintf(file, "%c", (j_instruct->addr & 0x00ff00) >> 8);
+				//Byte 2
+            	fprintf(file, "%c", (j_instruct->addr & 0xff0000) >> 16);
+				//Byte 1
+            	fprintf(file, "%c", (j_instruct->opcode << 2) + ((j_instruct->addr >> 24) & 0x3));
+			}
         }
         else{
             printf("Unrecognized instruction! Skipping...\n");

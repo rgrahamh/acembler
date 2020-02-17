@@ -7,8 +7,10 @@
 //The size of arguments (area between delimitors)
 #define DELIM_SIZE 32
 
-//A char* for handlers to play around with; would be local, but this is far more efficient than constantly malloc-ing
-char val[32];
+enum ENDIAN_TYPE{
+	LITTLE = 0,
+	BIG = 1
+};
 
 //Struct for R-Type instructions
 typedef struct r_type_struct{
@@ -148,4 +150,10 @@ void handleRType(char* instr, int instrIdx, r_instr* new_instr);
 void handleIType(char* instr, int instrIdx, i_instr* new_instr);
 void handleJType(char* instr, int instrIdx, j_instr* new_instr);
 
+//Config
 int VERBOSE = 0;
+enum ENDIAN_TYPE ENDIAN = BIG;
+unsigned long mem_size = 0;
+
+//A char* for handlers to play around with; would be local, but this is far more efficient than constantly malloc-ing
+char val[32];
